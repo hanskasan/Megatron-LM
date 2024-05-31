@@ -103,7 +103,11 @@ class Attention(MegatronModule, ABC):
             skip_bias_add=True,
             is_expert=False,
             tp_comm_buffer_name='proj',
+            is_att=True,
         )
+
+        # HANS: Additional
+        self.linear_proj.set_layer_number(self.layer_number)
 
     def _checkpointed_attention_forward(
         self,
@@ -370,7 +374,11 @@ class SelfAttention(Attention):
             skip_bias_add=False,
             is_expert=False,
             tp_comm_buffer_name='qkv',
+            is_att=True
         )
+
+        # HANS: Additional
+        self.linear_qkv.set_layer_number(self.layer_number)
 
         if submodules.q_layernorm is not None:
             self.q_layernorm = build_module(

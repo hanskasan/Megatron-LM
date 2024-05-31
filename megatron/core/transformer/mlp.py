@@ -74,6 +74,7 @@ class MLP(MegatronModule):
             skip_bias_add=True,
             is_expert=is_expert,
             tp_comm_buffer_name='fc1',
+            # layer_number=self.layer_number # HANS: Additionals
         )
 
         self.activation_func = self.config.activation_func
@@ -89,7 +90,19 @@ class MLP(MegatronModule):
             skip_bias_add=True,
             is_expert=is_expert,
             tp_comm_buffer_name='fc2',
+            # layer_number=self.layer_number, # HANS: Additionals
         )
+
+        # HANS: Additional variable
+        self.layer_number = -1
+    
+    # HANS: Additional to assign layer number
+    def set_layer_number(self, layer_number: int):
+        self.layer_number = layer_number
+        # if hasattr(self.linear_fc1, 'set_layer_number'):
+        self.linear_fc1.set_layer_number(layer_number)
+        # if hasattr(self.linear_fc2, 'set_layer_number'):
+        self.linear_fc2.set_layer_number(layer_number)
 
     def forward(self, hidden_states):
 

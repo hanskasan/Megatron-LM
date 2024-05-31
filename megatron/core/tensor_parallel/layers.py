@@ -15,6 +15,9 @@ import torch.nn.init as init
 from torch.cuda.amp import custom_bwd, custom_fwd
 from torch.nn.parameter import Parameter
 
+# HANS: Additionals
+import numpy as np
+
 from megatron.core.model_parallel_config import ModelParallelConfig
 from megatron.core.parallel_state import (
     get_global_memory_buffer,
@@ -370,6 +373,10 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
         allreduce_dgrad,
         sequence_parallel,
         grad_output_buffer,
+        iteration,
+        layer_number,
+        is_att,
+        is_output,
     ):
         ctx.save_for_backward(input, weight)
         ctx.use_bias = bias is not None
@@ -377,6 +384,13 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
         ctx.allreduce_dgrad = allreduce_dgrad
         ctx.sequence_parallel = sequence_parallel
         ctx.grad_output_buffer = grad_output_buffer
+        # HANS: Additionals
+        ctx.iteration = iteration
+        ctx.layer_number = layer_number
+        ctx.is_att = is_att
+        ctx.is_output = is_output
+
+        # print("FORWARD", iteration, layer_number, is_att)
 
         if sequence_parallel:
             world_size = get_tensor_model_parallel_world_size()
@@ -437,6 +451,20 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
             )
 
         if ctx.allreduce_dgrad:
+            # HANS: Dump gradients during backward-phase in model-parallelism
+            # if ctx.iteration == 1000:
+            if False:
+                print("Dumping gradients at layer", ctx.layer_number, "..")
+                if ctx.is_att is True:
+                    gradname = "/home/lustre/NLP/Megatron-LM/gradients/att-bw_iter" + str(ctx.iteration) + "_layer" + str(ctx.layer_number) +  "_gpu" + str(torch.distributed.get_rank())
+                elif ctx.is_output is True:
+                    gradname = "/home/lustre/NLP/Megatron-LM/gradients/out-bw_iter" + str(ctx.iteration) + "_gpu" + str(torch.distributed.get_rank())
+                else:
+                    gradname = "/home/lustre/NLP/Megatron-LM/gradients/mlp-bw_iter" + str(ctx.iteration) + "_layer" + str(ctx.layer_number) +  "_gpu" + str(torch.distributed.get_rank())
+                grad_at_cpu = grad_input.cpu().numpy()
+                np.savetxt(gradname, grad_at_cpu.reshape(-1))
+            # ***** END OF GRADIENT DUMPING *****
+
             # Asynchronous all-reduce
             handle = torch.distributed.all_reduce(
                 grad_input, group=get_tensor_model_parallel_group(), async_op=True
@@ -500,12 +528,14 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
             handle.wait()
             # Need to return None's as gradient has to flow for all the input arguments
             # provided during forward
-            return sub_grad_input, grad_weight, grad_bias, None, None, None, None
+            # HANS: Additional gradients due to the additional args
+            return sub_grad_input, grad_weight, grad_bias, None, None, None, None, None, None, None, None
 
         if ctx.allreduce_dgrad:
             handle.wait()
 
-        return grad_input, grad_weight, grad_bias, None, None, None, None
+        # HANS: Additional gradients due to the additional args
+        return grad_input, grad_weight, grad_bias, None, None, None, None, None, None, None, None
 
 
 def linear_with_grad_accumulation_and_async_allreduce(
@@ -517,6 +547,10 @@ def linear_with_grad_accumulation_and_async_allreduce(
     sequence_parallel: bool,
     grad_output_buffer: Optional[List[torch.Tensor]] = None,
     allreduce_dgrad: bool = None,
+    iteration: int = 0,
+    layer_number: int = 0,
+    is_att: bool = False,
+    is_output: bool = False,
 ) -> torch.Tensor:
     """Linear layer execution with asynchronous communication and
     gradient accumulation fusion in backprop.
@@ -594,6 +628,10 @@ def linear_with_grad_accumulation_and_async_allreduce(
         allreduce_dgrad,
         sequence_parallel,
         grad_output_buffer,
+        iteration,
+        layer_number,
+        is_att,
+        is_output,
     ]
 
     if not linear_with_grad_accumulation_and_async_allreduce.warned:
@@ -662,6 +700,8 @@ class ColumnParallelLinear(torch.nn.Module):
         is_expert: bool = False,
         tp_comm_buffer_name: str = None,  # Not used
         disable_grad_reduce: bool = False,
+        is_att: bool = False, # HANS: Additional parameter
+        is_output: bool = False, # HANS: Additional parameter
     ):
         super(ColumnParallelLinear, self).__init__()
 
@@ -794,6 +834,17 @@ class ColumnParallelLinear(torch.nn.Module):
             )
         )
 
+        # HANS: Additionals
+        self.iteration = 0
+        self.layer_number = -1
+        self.is_att = is_att
+        self.is_output = is_output
+    
+    # HANS: Additionals to assign layer number
+    def set_layer_number(self, layer_number: int):
+        self.layer_number = layer_number
+        # print("Hi, I am layer", self.layer_number, "is_att", self.is_att)
+
     def forward(self, input_: torch.Tensor, weight: Optional[torch.Tensor] = None):
         """Forward of ColumnParallelLinear
 
@@ -853,6 +904,9 @@ class ColumnParallelLinear(torch.nn.Module):
 
         allreduce_dgrad = False if self.explicit_expert_comm else self.allreduce_dgrad
 
+        # HANS: Additionals
+        self.iteration += 1
+
         output_parallel = self._forward_impl(
             input=input_parallel,
             weight=weight,
@@ -864,6 +918,10 @@ class ColumnParallelLinear(torch.nn.Module):
             if self.config.defer_embedding_wgrad_compute
             else None,
             allreduce_dgrad=allreduce_dgrad,
+            iteration=self.iteration,
+            layer_number=self.layer_number,
+            is_att=self.is_att,
+            is_output=self.is_output
         )
         if self.gather_output:
             # All-gather across the partitions.
@@ -924,6 +982,7 @@ class RowParallelLinear(torch.nn.Module):
         keep_master_weight_for_test: bool = False,
         is_expert: bool = False,
         tp_comm_buffer_name: str = None,  # Not used
+        is_att: bool = False, # HANS: Additional parameter
     ):
         super(RowParallelLinear, self).__init__()
 
@@ -1027,6 +1086,15 @@ class RowParallelLinear(torch.nn.Module):
             )
         )
 
+        # HANS: Additionals
+        self.iteration = 0
+        self.layer_number = -1
+        self.is_att = is_att
+    
+    # HANS: Additionals to assign layer number
+    def set_layer_number(self, layer_number: int):
+        self.layer_number = layer_number
+
     def forward(self, input_):
         """Forward of RowParallelLinear
 
@@ -1058,6 +1126,9 @@ class RowParallelLinear(torch.nn.Module):
 
         allreduce_dgrad = False
 
+        # HANS: Additionals
+        self.iteration += 1
+
         output_parallel = self._forward_impl(
             input=input_parallel,
             weight=self.weight,
@@ -1067,6 +1138,7 @@ class RowParallelLinear(torch.nn.Module):
             sequence_parallel=False,
             grad_output_buffer=None,
             allreduce_dgrad=allreduce_dgrad,
+            iteration=self.iteration,
         )
 
         # All-reduce across all the partitions.
@@ -1076,6 +1148,30 @@ class RowParallelLinear(torch.nn.Module):
         elif self.sequence_parallel:
             output_ = reduce_scatter_to_sequence_parallel_region(output_parallel)
         else:
+            # HANS: Force value to be zero to model packet error
+            if self.is_att == False and self.layer_number == 1:
+            # if False:
+                output_size = output_parallel.size()
+                num_of_zeroing = int(0.75 * output_size[0])
+
+                # OPTION 1: Deterministic
+                zeros = torch.zeros(output_size[1], output_size[2], dtype=output_parallel.dtype).cuda()
+                for iter in range(num_of_zeroing):
+                    output_parallel[iter][:][:] = zeros
+            # ***** END OF FORCE ZEROING *****
+
+            # HANS: Dump gradients during forward-phase in model-parallelism
+            # if self.iteration == 1000:
+            if False:
+                print("Dumping gradients at layer", self.layer_number, "..")
+                if self.is_att is True:
+                    gradname = "/home/lustre/NLP/Megatron-LM/gradients/att-fw_iter" + str(self.iteration) + "_layer" + str(self.layer_number) +  "_gpu" + str(torch.distributed.get_rank())
+                else:
+                    gradname = "/home/lustre/NLP/Megatron-LM/gradients/mlp-fw_iter" + str(self.iteration) + "_layer" + str(self.layer_number) +  "_gpu" + str(torch.distributed.get_rank())
+                grad_at_cpu = output_parallel.detach().cpu().numpy()
+                np.savetxt(gradname, grad_at_cpu.reshape(-1))
+            # ***** END OF GRADIENT DUMPING *****
+            
             output_ = reduce_from_tensor_model_parallel_region(output_parallel)
         if not self.skip_bias_add:
             output = (output_ + self.bias) if self.bias is not None else output_

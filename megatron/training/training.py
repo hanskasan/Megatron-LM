@@ -777,6 +777,9 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
         elapsed_time = timers('interval-time').elapsed(barrier=True)
         elapsed_time_per_iteration = elapsed_time / total_iterations
 
+        # HANS: Additional log
+        # elapsed_fwbw_time_per_iteration= timers('forward-backward').elapsed(barrier=True)
+
         throughput = num_floating_point_operations(args, batch_size) / (
             elapsed_time_per_iteration * 10**12 * args.world_size)
         if args.log_timers_to_tensorboard:
@@ -841,6 +844,10 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
             report_memory('(after {} iterations)'.format(iteration))
             report_memory_flag = False
         timers.log(timers_to_log, normalizer=args.log_interval)
+
+        # HANS: Additional log
+        # log_string += ' elapsed FW-BW time per iteration (ms): {:.1f} |'.format(
+            # elapsed_fwbw_time_per_iteration * 1000.0)
 
     return report_memory_flag
 

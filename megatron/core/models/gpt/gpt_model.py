@@ -127,6 +127,7 @@ class GPTModel(LanguageModule):
                 and self.share_embeddings_and_output_weights,
                 embedding_activation_buffer=self.embedding_activation_buffer,
                 grad_output_buffer=self.grad_output_buffer,
+                is_output=True, # HANS: Additional parameter
             )
 
         if self.pre_process or self.post_process:

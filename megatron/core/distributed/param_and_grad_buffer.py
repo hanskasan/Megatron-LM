@@ -11,6 +11,10 @@ import torch
 from .. import parallel_state
 from .distributed_data_parallel_config import DistributedDataParallelConfig
 
+# HANS: Additionals
+import numpy as np
+import time
+
 logger = getLogger(__name__)
 
 
@@ -83,6 +87,9 @@ class Bucket:
         self.data_parallel_rank = torch.distributed.get_rank(group=data_parallel_group)
         self.gradient_scaling_factor = gradient_scaling_factor
 
+        # HANS: Additionals
+        self.count_execution = 0
+
         self.reset()
 
     def reset(self):
@@ -131,11 +138,38 @@ class Bucket:
                 async_op=self.ddp_config.overlap_grad_reduce,
             )
         else:
+            # start_time = time.time()
+
+            # HANS: Dump gradients before communicating
+            self.count_execution += 1
+            # if self.count_execution == 1000:
+            if False:
+                print("Dumping gradients..")
+                gradname = "/home/lustre/NLP/Megatron-LM/gradients/grad_" + str(torch.distributed.get_rank())
+                grad_at_cpu = self.grad_data.cpu().numpy()
+                np.savetxt(gradname, grad_at_cpu)
+            # ***** END OF GRADIENT DUMPING *****
+
             self.communication_handle = torch.distributed.all_reduce(
                 self.grad_data,
                 group=self.data_parallel_group,
                 async_op=self.ddp_config.overlap_grad_reduce,
             )
+
+            # HANS: Force message to be small
+            # dummy = self.grad_data[0:1] 
+            # self.communication_handle = torch.distributed.all_reduce(
+                # dummy,
+                # group=self.data_parallel_group,
+                # async_op=self.ddp_config.overlap_grad_reduce,
+            # )
+
+            # torch.distributed.barrier()
+            # torch.cuda.synchronize()
+
+            # elapsed_time = time.time() - start_time
+            # print("AllReduce time:", elapsed_time)
+
         self.communication_issued = True
 
     def finish_grad_sync(self):

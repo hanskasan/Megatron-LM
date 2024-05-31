@@ -12,6 +12,9 @@ from megatron.core.pipeline_parallel import p2p_communication
 from megatron.core.transformer.moe.router import MoEAuxLossAutoScaler
 from megatron.core.utils import get_attr_wrapped_model, get_model_config, get_model_type
 
+# HANS: Additionals
+# import time
+
 # Types
 Shape = Union[List[int], torch.Size]
 
@@ -396,6 +399,9 @@ def forward_backward_no_pipelining(
 
     # Run computation for last microbatch out of context handler (want to
     # synchronize gradients).
+    
+    # HANS: Additionals
+    # start_time = time.time()
     output_tensor, num_tokens = forward_step(
         forward_step_func,
         data_iterator,
@@ -410,10 +416,18 @@ def forward_backward_no_pipelining(
         ),
         current_microbatch=num_microbatches - 1,
     )
+    # elapsed_time = time.time() - start_time
+    # print("Forward time:", elapsed_time)
+
     total_num_tokens += num_tokens.item()
 
     if not forward_only:
+        # start_time = time.time()
         backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, config)
+        # torch.distributed.barrier()
+        # torch.cuda.synchronize()
+        # elapsed_time = time.time() - start_time
+        # print("Backward time:", elapsed_time)
 
     if config.finalize_model_grads_func is not None and not forward_only:
         # Finalize model grads (perform full grad all-reduce / reduce-scatter for
@@ -424,6 +438,7 @@ def forward_backward_no_pipelining(
 
     if config.timers is not None:
         config.timers('forward-backward').stop()
+        # config.timers('forward-backward').stop(barrier=True) # HANS: For debugging
 
     return forward_data_store
 
@@ -457,6 +472,7 @@ def forward_backward_pipelining_with_interleaving(
 
     if config.timers is not None:
         config.timers('forward-backward', log_level=1).start(barrier=config.barrier_with_L1_time)
+        # config.timers('forward-backward', log_level=0).start(barrier=True) #HANS: For debugging
 
     # Disable async grad reductions
     no_sync_func = config.no_sync_func
