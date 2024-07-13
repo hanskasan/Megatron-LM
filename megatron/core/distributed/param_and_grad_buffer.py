@@ -11,6 +11,11 @@ import torch
 from ..utils import log_on_each_pipeline_stage
 from .distributed_data_parallel_config import DistributedDataParallelConfig
 
+# HANS: Additionals
+import numpy as np
+import time
+from ..optimizer.clip_grads import clip_grad_by_total_norm_fp32, get_grad_norm_fp32
+
 logger = logging.getLogger(__name__)
 
 
@@ -127,6 +132,10 @@ class Bucket:
         if self.ddp_config.average_in_collective:
             reduce_op = torch.distributed.ReduceOp.AVG
 
+        ### HANS: LOCAL GRADIENT CLIPPING ###
+        # if self.ddp_config.local_clip_grad > 0.0:
+            # self.grad_data = self.cl
+
         # Use async_op only when overlap_grad_reduce is True.
         if self.ddp_config.use_distributed_optimizer:
             local_data_view = shard_buffer(self.grad_data, self.data_parallel_world_size)[
@@ -140,12 +149,93 @@ class Bucket:
                 async_op=self.ddp_config.overlap_grad_reduce,
             )
         else:
+            ### HANS: TOPK ###
+            # how_top = 0.01
+            # print("SHAPE:", self.grad_data.shape)
+            # grad_abs = torch.abs(self.grad_data)
+            # topk_val, topk_idx = torch.topk(grad_abs, k=int(how_top * self.grad_data.shape[0]), sorted=False)
+            # dummy = torch.cat([topk_val, topk_idx])
+
+            # self.communication_handle = torch.distributed.all_reduce(
+            #     dummy,
+            #     op=reduce_op,
+            #     group=self.data_parallel_group,
+            #     async_op=self.ddp_config.overlap_grad_reduce,
+            # )
+            ### END OF TOPK ###
+
+            ### HANS: TO MEASURE COMMUNICATION TIME ###
+            # if torch.distributed.get_rank() == 0:
+                # start_time=time.time()
+            ### MEASURING ENDS HERE ###
+
+            ### HANS: FORCE MESSAGE TO BE SMALL ###
+            # dummy = self.grad_data[0:1]
+            # self.communication_handle = torch.distributed.all_reduce(
+                # dummy,
+                # op=reduce_op,
+                # group=self.data_parallel_group,
+                # async_op=self.ddp_config.overlap_grad_reduce,
+            # )
+
+            ### HANS: GRADIENT DUMPING ###
+            # print("Dumping gradients at rank", torch.distributed.get_rank(), "...")
+            # gradname = "/home/lustre/NLP/Megatron-LM_clean/gradients/gpt1.7B/grad_iter150000_gpu" + str(torch.distributed.get_rank())
+            # gradname = "/home/lustre/NLP/Megatron-LM_clean/gradients/bertl/grad_iter400000_gpu" + str(torch.distributed.get_rank())
+            # print("Size:", self.grad_data.size())
+
+            # count_nan = torch.count_nonzero(torch.isnan(self.grad_data))
+            # count_inf = torch.count_nonzero(torch.isinf(self.grad_data))
+
+            # print("Max:", torch.max(self.grad_data))
+            # print("Min:", torch.min(self.grad_data))
+            # print("NANs:", count_nan)
+            # print("INFs:", count_inf)
+
+            # result = torch.histc(self.grad_data.float(), 500, min=-1, max=1) # HANS: histc does not work when bin is higher :(
+
+            # hist_at_cpu = result.cpu().numpy()
+            # with open(gradname, 'w') as f:
+                # np.savetxt(f, hist_at_cpu)
+            # torch.cuda.synchronize()
+            # assert False # Stop program after dumping
+            ### END OF GRADIENT DUMPING ###
+
+            ### HANS: CHECK GRADIENT EXPLOSION ###
+            # nan_dumpname = "/home/lustre/NLP/Megatron-LM_clean/dumps/nan-gpu" + str(torch.distributed.get_rank())
+            # inf_dumpname = "/home/lustre/NLP/Megatron-LM_clean/dumps/inf-gpu" + str(torch.distributed.get_rank())
+            # count_nan = torch.count_nonzero(torch.isnan(self.grad_data))
+            # count_inf = torch.count_nonzero(torch.isinf(self.grad_data))
+            
+            # count_not_nan_cpu = count_nan.cpu().numpy()
+            # count_not_inf_cpu = count_inf.cpu().numpy()
+
+            # with open(nan_dumpname, 'a') as f:
+            #     # np.savetxt(f, count_nan_cpu)
+            #     print(count_nan_cpu, file=f)
+
+            # with open(inf_dumpname, 'a') as f:
+            #     # np.savetxt(f, count_inf_cpu)
+            #     print(count_inf_cpu, file=f)
+
+            # torch.cuda.synchronize()
+            ### END OF CHECK GRADIENT EXPLOSION ###
+            
+            ### THE ORIGINAL ALLREDUCE: UNCOMMENT THIS PART TO USE THE BASELINE ###
             self.communication_handle = torch.distributed.all_reduce(
                 self.grad_data,
                 op=reduce_op,
                 group=self.data_parallel_group,
                 async_op=self.ddp_config.overlap_grad_reduce,
             )
+            ### END OF THE ORIGINAL ALLREDUCE ###
+
+            ### HANS: TO MEASURE COMMUNICATION TIME ###
+            # torch.distributed.barrier()
+            # if torch.distributed.get_rank() == 0:
+                # print(time.time() - start_time)
+            ### MEASURING ENDS HERE ###
+
         if self.ddp_config.overlap_grad_reduce:
             self.is_communication_outstanding = True
         else:

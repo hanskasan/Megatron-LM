@@ -201,7 +201,7 @@ class VitBackbone(MegatronModule):
             model_type=args.model_type,
             pre_process=self.pre_process,
             post_process=self.post_process,
-            post_layer_norm=self.post_layer_norm,
+            # post_layer_norm=self.post_layer_norm,
             drop_path_rate=self.drop_path_rate
         )
 

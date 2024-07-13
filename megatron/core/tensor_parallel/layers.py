@@ -229,6 +229,11 @@ class VocabParallelEmbedding(torch.nn.Module):
             output_parallel[input_mask, :] = 0.0
         # Reduce across all the model parallel GPUs.
         output = reduce_from_tensor_model_parallel_region(output_parallel)
+
+        # HANS: Comment this out when not needed to not add useless performance overhead
+        # if self.weight is not None:
+            # print(self.weight.grad)
+
         return output
 
     def sharded_state_dict(
