@@ -111,8 +111,7 @@ def main():
     parser = argparse.ArgumentParser(description="Megatron Checkpoint Converter Arguments",
                                      allow_abbrev=False, conflict_handler='resolve')
 
-    parser.add_argument('--model-type', type=str, required=True,
-                        choice=['GPT', 'BERT'],
+    parser.add_argument('--model-type', type=str, required=True, default='GPT',
                         help='Type of the model')
     parser.add_argument('--loader', type=str, default='megatron',
                         help='Module name to load checkpoint, should be on python path')

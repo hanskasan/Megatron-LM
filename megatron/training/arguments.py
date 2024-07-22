@@ -1380,6 +1380,9 @@ def _add_distributed_args(parser):
                         help='If set, distributed ranks initialize order is changed '
                         'from tp-dp-pp to tp-pp-dp. Make sure EP and CP aren\'t used '
                         'with this option enabled')
+    # HANS: Additionals
+    group.add_argument('--local-clip-grad', type=float, default=0.0,
+                       help='Coefficient for local gradient clipping')
     return parser
 
 

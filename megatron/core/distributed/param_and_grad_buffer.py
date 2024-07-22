@@ -14,7 +14,7 @@ from .distributed_data_parallel_config import DistributedDataParallelConfig
 # HANS: Additionals
 import numpy as np
 import time
-from ..optimizer.clip_grads import clip_grad_by_total_norm_fp32, get_grad_norm_fp32
+# from ..optimizer.clip_grads import clip_grad_by_total_norm_fp32, get_grad_norm_fp32
 
 logger = logging.getLogger(__name__)
 
@@ -133,9 +133,16 @@ class Bucket:
             reduce_op = torch.distributed.ReduceOp.AVG
 
         ### HANS: LOCAL GRADIENT CLIPPING ###
-        # if self.ddp_config.local_clip_grad > 0.0:
-            # self.grad_data = self.cl
-
+        if self.ddp_config.local_clip_grad > 0.0:
+            norm = self.grad_data.norm(p=2)
+            if not norm.isnan() and not norm.isinf():
+                clip_coeff = self.ddp_config.local_clip_grad / (norm + 1.0e-6)
+                if clip_coeff < 1.0:
+                    # print("Clip:", clip_coeff)
+                    self.grad_data *= clip_coeff
+                    # print(self.grad_data)
+        # print(norm)
+        
         # Use async_op only when overlap_grad_reduce is True.
         if self.ddp_config.use_distributed_optimizer:
             local_data_view = shard_buffer(self.grad_data, self.data_parallel_world_size)[
@@ -180,8 +187,9 @@ class Bucket:
 
             ### HANS: GRADIENT DUMPING ###
             # print("Dumping gradients at rank", torch.distributed.get_rank(), "...")
-            # gradname = "/home/lustre/NLP/Megatron-LM_clean/gradients/gpt1.7B/grad_iter150000_gpu" + str(torch.distributed.get_rank())
-            # gradname = "/home/lustre/NLP/Megatron-LM_clean/gradients/bertl/grad_iter400000_gpu" + str(torch.distributed.get_rank())
+            # # gradname = "/home/lustre/NLP/Megatron-LM_clean/gradients/gpt1.7B/grad_iter150000_gpu" + str(torch.distributed.get_rank())
+            # # gradname = "/home/lustre/NLP/Megatron-LM_clean/gradients/bertl/grad_iter400000_gpu" + str(torch.distributed.get_rank())
+            # gradname = "/home/lustre/NLP/Megatron-LM_clean/gradients/gpt1.7B_fp32/grad_iter50000_gpu" + str(torch.distributed.get_rank())
             # print("Size:", self.grad_data.size())
 
             # count_nan = torch.count_nonzero(torch.isnan(self.grad_data))
@@ -192,11 +200,11 @@ class Bucket:
             # print("NANs:", count_nan)
             # print("INFs:", count_inf)
 
-            # result = torch.histc(self.grad_data.float(), 500, min=-1, max=1) # HANS: histc does not work when bin is higher :(
+            # result = torch.histc(self.grad_data.float(), 500, min=-0.01, max=0.01) # HANS: histc does not work with more bins :(
 
             # hist_at_cpu = result.cpu().numpy()
             # with open(gradname, 'w') as f:
-                # np.savetxt(f, hist_at_cpu)
+            #     np.savetxt(f, hist_at_cpu)
             # torch.cuda.synchronize()
             # assert False # Stop program after dumping
             ### END OF GRADIENT DUMPING ###

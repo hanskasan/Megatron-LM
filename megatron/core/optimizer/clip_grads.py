@@ -44,6 +44,7 @@ def get_grad_norm_fp32(
     total_norm = 0.0
 
     # Calculate norm.
+    # HANS KASAN was here! We used norm_type = 2.0.
     if norm_type == inf:
         total_norm = max(grad.abs().max() for grad in grads_for_norm)
         total_norm_cuda = torch.tensor([float(total_norm)], dtype=torch.float, device='cuda')

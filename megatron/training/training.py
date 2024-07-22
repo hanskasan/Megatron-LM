@@ -422,7 +422,9 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
             use_distributed_optimizer=args.use_distributed_optimizer,
             check_for_nan_in_grad=args.check_for_nan_in_loss_and_grad,
             bucket_size=args.ddp_bucket_size,
-            average_in_collective=args.ddp_average_in_collective)
+            average_in_collective=args.ddp_average_in_collective,
+            local_clip_grad=args.local_clip_grad # HANS: Additionals
+            )
         model = [DDP(config,
                      ddp_config,
                      model_chunk,
