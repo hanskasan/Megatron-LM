@@ -32,6 +32,8 @@ GPT_ARGS="
     --use-mcore-models \
     --transformer-impl local \
     --overlap-grad-reduce \
+    --attention-dropout 0.0 \
+    --hidden-dropout 0.0 \
 "
 
     # --seed 0 \

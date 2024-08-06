@@ -71,6 +71,8 @@ GPT_ARGS="
     # --recompute-granularity full \
     # --recompute-method uniform \
     # --recompute-num-layers 4
+    # --ddp-bucket-size 43000000 \
+
 
 DATA_ARGS="
     --data-path $DATA_PATH \
@@ -92,6 +94,7 @@ torchrun $DISTRIBUTED_ARGS /home/lustre/NLP/Megatron-LM_clean/pretrain_gpt.py \
     $OUTPUT_ARGS \
     --distributed-backend nccl \
     --local-clip-grad 0.0 \
+    --measure-aot \
     # --load $CHECKPOINT_PATH \
     # --save $CHECKPOINT_PATH \
     # --overlap-grad-reduce

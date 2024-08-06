@@ -888,6 +888,13 @@ def _add_logging_args(parser):
                        '--enable-one-logger is not set')
     group.add_argument('--logging-level', type=int, default=None,
                        help='Set default logging level')
+
+    # HANS: Additional
+    group.add_argument('--measure-aot', action='store_true',
+                       help='Measure accuracy-over-time (AoT)')
+    group.add_argument('--aot-period', type=int, default=120,
+                       help='Period to log for accuracy-over-time (AoT)')
+
     return parser
 
 

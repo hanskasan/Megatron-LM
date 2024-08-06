@@ -46,6 +46,8 @@ BERT_ARGS="
     --transformer-impl local \
     --spec local \
     --overlap-grad-reduce \
+    --attention-dropout 0.0 \
+    --hidden-dropout 0.0 \
 "
     # --attention-softmax-in-fp32 \
 

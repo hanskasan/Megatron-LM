@@ -616,7 +616,8 @@ def train_step(forward_step_func, data_iterator,
 
 def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_rate, iteration,
                  loss_scale, report_memory_flag, skipped_iter,
-                 grad_norm, params_norm, num_zeros_in_grad):
+                 grad_norm, params_norm, num_zeros_in_grad,
+                 last_timestamp):
     """Log training information such as losses, timing, ...."""
     args = get_args()
     timers = get_timers()
@@ -774,7 +775,18 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
         moe_loss_scale = 1 / get_num_microbatches()
         track_moe_metrics(moe_loss_scale, iteration, writer, wandb_writer, total_loss_dict, args.moe_per_layer_logging)
 
-    if iteration % args.log_interval == 0:
+    # HANS: Incorporate AOT
+    is_print = False
+
+    if args.measure_aot is True:
+        if time.time() - last_timestamp >= args.aot_period: 
+            is_print = True
+    else:
+        if iteration % args.log_interval == 0:
+            is_print = True
+
+    # if iteration % args.log_interval == 0:
+    if is_print is True:
         elapsed_time = timers('interval-time').elapsed(barrier=True)
         elapsed_time_per_iteration = elapsed_time / total_iterations
 
@@ -1003,6 +1015,9 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
                 'validation_iterations_time_msecs_avg': validation_iterations_time_msecs_avg
             })
 
+    # HANS: For AoT
+    last_timestamp = time.time()
+
     while iteration < args.train_iters:
         if args.profile and \
            iteration == args.profile_step_start and \
@@ -1050,7 +1065,17 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
         if args.log_params_norm:
             params_norm = calc_params_l2_norm(model)
 
-        if iteration % args.log_interval == 0:
+        # HANS: For AoT
+        is_log = False
+        if args.measure_aot is True:
+            if (time.time() - last_timestamp) >= args.aot_period:
+                is_log = True
+        else:
+            if iteration % args.log_interval == 0:
+                is_log = True
+
+        # if iteration % args.log_interval == 0:
+        if is_log is True:
             track_e2e_metrics()
 
         learning_rate = None
@@ -1065,7 +1090,8 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
                                           decoupled_learning_rate,
                                           iteration, loss_scale,
                                           report_memory_flag, skipped_iter,
-                                          grad_norm, params_norm, num_zeros_in_grad)
+                                          grad_norm, params_norm, num_zeros_in_grad,
+                                          last_timestamp) # HANS: Additionals
         # StragglerDetector
         if iteration % args.log_interval == 0 and args.log_straggler:
             stimer.report(total_flops, args.log_interval)
@@ -1089,8 +1115,19 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
                                               opt_param_scheduler)
 
         # Evaluation
-        if args.eval_interval and iteration % args.eval_interval == 0 and \
-           args.do_valid:
+
+        # HANS: For AoT
+        is_eval = False
+        if args.measure_aot is True:
+            if (time.time() - last_timestamp) >= args.aot_period:
+                is_eval = True
+        else:
+            if iteration % args.eval_interval == 0:
+                is_eval = True
+
+        # if args.eval_interval and iteration % args.eval_interval == 0 and \
+        #    args.do_valid:
+        if args.eval_interval and is_eval and args.do_valid:
             timers('interval-time').stop()
             if args.use_distributed_optimizer and args.overlap_param_gather:
                 optimizer.disable_pre_hook()
@@ -1112,6 +1149,10 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
             if args.use_distributed_optimizer and args.overlap_param_gather:
                 optimizer.enable_pre_hook()
             timers('interval-time', log_level=0).start(barrier=True)
+
+            # HANS: For AoT
+            if args.measure_aot is True:
+                last_timestamp = time.time()
 
         # Checkpointing
         saved_checkpoint = False
