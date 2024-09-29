@@ -139,6 +139,9 @@ class MegatronOptimizer(ABC):
         total_norm = get_grad_norm_fp32(
             grads_for_norm, model_parallel_group=self.get_model_parallel_group(),
         )
+        # HANS: For debugging
+        # if torch.distributed.get_rank() == 0:
+            # print("Total norm:", total_norm)
         return total_norm
 
     def clip_grad_norm(self, clip_grad: float) -> float:
@@ -393,6 +396,9 @@ class MixedPrecisionOptimizer(MegatronOptimizer):
         grad_norm = None
         if self.config.clip_grad > 0.0:
             grad_norm = self.clip_grad_norm(self.config.clip_grad)
+        # HANS: Additionals
+        # elif self.config.clip_grad == 0.0:
+            # grad_norm = self.get_grad_norm()
         if timers is not None:
             timers('optimizer-clip-main-grad').stop()
 
@@ -721,6 +727,9 @@ class FP32Optimizer(MegatronOptimizer):
         grad_norm = None
         if self.config.clip_grad > 0.0:
             grad_norm = self.clip_grad_norm(self.config.clip_grad)
+        # HANS: Additionals
+        elif self.config.clip_grad == 0.0:
+            grad_norm = self.get_grad_norm()
         if timers is not None:
             timers('optimizer-clip-main-grad').stop()
 

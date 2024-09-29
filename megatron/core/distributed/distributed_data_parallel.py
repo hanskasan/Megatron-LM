@@ -139,7 +139,7 @@ class DistributedDataParallel(MegatronModule):
                 for param in params:
                     self.param_to_buffer[param] = buffers[-1]
 
-            return buffers
+            return buffers  
 
         if config.calculate_per_token_loss:
             gradient_scaling_factor = 1.0
@@ -323,3 +323,9 @@ class DistributedDataParallel(MegatronModule):
         the keys returned by this module’s state_dict() function.
         """
         self.module.load_state_dict(state_dict, strict=strict)
+
+    # HANS: Additionals
+    def local_grad_norm(self):
+        """Local gradient clipping."""
+        for buffer in self.buffers + self.expert_parallel_buffers:
+            buffer.local_grad_norm()

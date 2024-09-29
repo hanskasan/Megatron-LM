@@ -41,15 +41,17 @@ BERT_ARGS="
     --lr-warmup-fraction .01 \
     --weight-decay 1e-2 \
     --clip-grad 1.0 \
-    --fp16 \
     --use-mcore-models \
     --transformer-impl local \
     --spec local \
-    --overlap-grad-reduce \
     --attention-dropout 0.0 \
     --hidden-dropout 0.0 \
+    --overlap-grad-reduce \
 "
-    # --attention-softmax-in-fp32 \
+    # --fp16 \
+    # --local-clip-grad 1.0 \
+    # --adam-beta2 0.999999 \
+    # --seed 1234 \
 
 DATA_ARGS="
     --data-path $DATA_PATH \

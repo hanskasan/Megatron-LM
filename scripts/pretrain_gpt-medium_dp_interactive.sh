@@ -30,7 +30,7 @@ NNODES=1
 NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
-CHECKPOINT_PATH=${MEGATRON_HOME}/checkpoints/pretrain_gpt1.7B_dp/baseline_fp32/
+CHECKPOINT_PATH=${MEGATRON_HOME}/checkpoints/pretrain_gpt-medium_dp/baseline_fp32/
 VOCAB_FILE=${DATASET_HOME}/vocabs/gpt2-vocab.json
 MERGE_FILE=${DATASET_HOME}/vocabs/gpt2-merges.txt
 DATA_PATH=${DATASET_HOME}/Wikipedia-GPT/hfbpe_gpt_training_data_text_document
@@ -47,8 +47,8 @@ DISTRIBUTED_ARGS="
 
 GPT_ARGS="
     --num-layers 24 \
-    --hidden-size 2304 \
-    --num-attention-heads 24 \
+    --hidden-size 1024 \
+    --num-attention-heads 16 \
     --seq-length 1024 \
     --max-position-embeddings 1024 \
     --micro-batch-size 1 \
@@ -64,10 +64,11 @@ GPT_ARGS="
     --transformer-impl local \
     --attention-dropout 0.0 \
     --hidden-dropout 0.0 \
-    --overlap-grad-reduce \
-    --ddp-bucket-size 200000000 \
 "
+
+    # --overlap-grad-reduce \
     # --fp16 \
+    # --ddp-bucket-size 200000000 \
 
     # --attention-softmax-in-fp32 \
     
@@ -87,7 +88,7 @@ DATA_ARGS="
 "
 
 OUTPUT_ARGS="
-    --log-interval 100 \
+    --log-interval 5 \
     --save-interval 10000 \
     --eval-interval 1000 \
     --eval-iters 10

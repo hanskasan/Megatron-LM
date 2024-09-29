@@ -7,21 +7,6 @@ DATASET_HOME="/home/lustre/datasets"
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-# LIBRARIES
-export BASE_PATH=/usr/lib/x86_64-linux-gnu/
-# export LD_LIBRARY_PATH=/home/lustre/libs/allreduce/pruning/random/build/lib/:$BASE_PATH
-# export LD_LIBRARY_PATH=/home/lustre/libs/allreduce/shifting_skipreduce/random_oscillate/build/lib/:$BASE_PATH
-
-# export NCCL_PROB_NUM_1='2'
-# export NCCL_PROB_DENUM_1='4'
-# export NCCL_PROB_NUM_2='2'
-# export NCCL_PROB_DENUM_2='4'
-# export NCCL_WARMUP_PERIOD='1'
-
-# export NCCL_OSC_PERIOD='1'
-# export NCCL_SKIP_RS_1='0'
-# export NCCL_SKIP_RS_2='6'
-
 GPUS_PER_NODE=8
 # Change for multinode config
 MASTER_ADDR=localhost
@@ -30,25 +15,16 @@ NNODES=1
 NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
-CHECKPOINT_PATH=${MEGATRON_HOME}/checkpoints/pretrain_gpt1.7B_dp/baseline_fp32/
 VOCAB_FILE=${DATASET_HOME}/vocabs/gpt2-vocab.json
 MERGE_FILE=${DATASET_HOME}/vocabs/gpt2-merges.txt
 DATA_PATH=${DATASET_HOME}/Wikipedia-GPT/hfbpe_gpt_training_data_text_document
-
-DISTRIBUTED_ARGS="
-    --nproc_per_node $GPUS_PER_NODE \
-    --nnodes $NNODES \
-    --node_rank $NODE_RANK \
-    --master_addr $MASTER_ADDR \
-    --master_port $MASTER_PORT
-"
 
 # train-iters is originally 500000
 
 GPT_ARGS="
     --num-layers 24 \
-    --hidden-size 2304 \
-    --num-attention-heads 24 \
+    --hidden-size 1024 \
+    --num-attention-heads 16 \
     --seq-length 1024 \
     --max-position-embeddings 1024 \
     --micro-batch-size 1 \
@@ -65,19 +41,18 @@ GPT_ARGS="
     --attention-dropout 0.0 \
     --hidden-dropout 0.0 \
     --overlap-grad-reduce \
-    --ddp-bucket-size 200000000 \
 "
-    # --fp16 \
 
+    # --fp16 \
     # --attention-softmax-in-fp32 \
-    
-    # --transformer-impl local \
+
+    # --seed 0 \
     # --loss-scale 1.0 \
+
+
     # --recompute-granularity full \
     # --recompute-method uniform \
     # --recompute-num-layers 4
-    # --ddp-bucket-size 43000000 \
-
 
 DATA_ARGS="
     --data-path $DATA_PATH \
@@ -93,13 +68,11 @@ OUTPUT_ARGS="
     --eval-iters 10
 "
 
-torchrun $DISTRIBUTED_ARGS /home/lustre/NLP/Megatron-LM_clean/pretrain_gpt.py \
+python /home/lustre/NLP/Megatron-LM_clean/pretrain_gpt.py \
     $GPT_ARGS \
     $DATA_ARGS \
     $OUTPUT_ARGS \
     --distributed-backend nccl \
-    --load $CHECKPOINT_PATH \
+    --load $CHECKPOINT_PATH
 
-    # --local-clip-grad 0.0 \
-    # --measure-aot \
     # --save $CHECKPOINT_PATH \

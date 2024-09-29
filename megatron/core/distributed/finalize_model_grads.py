@@ -110,6 +110,9 @@ def finalize_model_grads(model: List[torch.nn.Module], num_tokens: Optional[torc
     if config.timers is not None:
         config.timers('all-grads-sync', log_level=1).start(barrier=config.barrier_with_L1_time)
     for model_chunk in model:
+        # HANS: Additionals
+        model_chunk.local_grad_norm()
+        # HANS: End of Additionals
         model_chunk.finish_grad_sync()
     if config.timers is not None:
         config.timers('all-grads-sync').stop()

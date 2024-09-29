@@ -24,31 +24,6 @@ DISTRIBUTED_ARGS="
     --master_port $MASTER_PORT
 "
 
-# BERT_ARGS="
-#     --tensor-model-parallel-size 1 \
-#     --pipeline-model-parallel-size 1 \
-#     --num-layers 24 \
-#     --hidden-size 1024 \
-#     --num-attention-heads 16 \
-#     --seq-length 512 \
-#     --max-position-embeddings 512 \
-#     --micro-batch-size 4 \
-#     --global-batch-size 32 \
-#     --lr 0.0001 \
-#     --train-iters 1000000 \
-#     --lr-decay-iters 990000 \
-#     --lr-decay-style linear \
-#     --min-lr 1.0e-5 \
-#     --weight-decay 1e-2 \
-#     --lr-warmup-fraction .01 \
-#     --clip-grad 1.0 \
-#     --fp16 \
-#     --use-mcore-models \
-#     --transformer-impl local \
-#     --spec local \
-#     --overlap-grad-reduce \
-# "
-
 BERT_ARGS="
     --tensor-model-parallel-size 1 \
     --pipeline-model-parallel-size 1 \
@@ -57,23 +32,26 @@ BERT_ARGS="
     --num-attention-heads 16 \
     --seq-length 512 \
     --max-position-embeddings 512 \
-    --micro-batch-size 1 \
-    --global-batch-size 8 \
-    --lr 1e-4 \
-    --train-iters 50000 \
+    --micro-batch-size 4 \
+    --global-batch-size 32 \
+    --lr 0.0001 \
+    --train-iters 1000000 \
     --lr-decay-iters 990000 \
     --lr-decay-style linear \
     --min-lr 1.0e-5 \
     --weight-decay 1e-2 \
+    --lr-warmup-fraction .01 \
     --clip-grad 1.0 \
-    --fp16 \
     --use-mcore-models \
     --transformer-impl local \
     --spec local \
+    --attention-dropout 0.0 \
+    --hidden-dropout 0.0 \
+    --fp16 \
     --overlap-grad-reduce \
 "
-
-    # --lr-warmup-fraction .01 \
+    # --local-clip-grad 1.0 \
+    # --overlap-grad-reduce \
 
 DATA_ARGS="
     --data-path $DATA_PATH \
@@ -88,9 +66,15 @@ OUTPUT_ARGS="
     --eval-iters 10
 "
 
+export LD_LIBRARY_PATH=/home/lustre/libs/allreduce/shifting_skipreduce/random_oscillate/build/lib/:$BASE_PATH
+export NCCL_PROTECT_FROM='280'
+export NCCL_PROTECT_TO='301'
+export NCCL_MOD_ITER='302'
+
 torchrun $DISTRIBUTED_ARGS /home/lustre/NLP/Megatron-LM_clean/pretrain_bert.py \
     $BERT_ARGS \
     $DATA_ARGS \
     $OUTPUT_ARGS \
     --distributed-backend nccl \
+    
     # --load $CHECKPOINT_PATH
